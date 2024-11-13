@@ -10,6 +10,7 @@ import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 import org.jsoup.parser.ParseErrorList;
 import org.jsoup.parser.Parser;
+import org.jsoup.select.Elements;
 import org.jsoup.select.NodeTraversor;
 import org.jsoup.select.NodeVisitor;
 
@@ -32,14 +33,25 @@ import java.util.List;
  */
 public class Cleaner {
     private final Safelist safelist;
+    private final Cleaner.CleanerSettings cleanerSettings;
 
     /**
      Create a new cleaner, that sanitizes documents using the supplied safelist.
      @param safelist safe-list to clean with
      */
     public Cleaner(Safelist safelist) {
+        this(safelist, new CleanerSettings().cleanAttributeValues(false));
+    }
+
+    /**
+     Create a new cleaner, that sanitizes documents using the supplied safelist.
+     @param safelist safe-list to clean with
+     @param cleanerSettings control how cleaner cleans
+     */
+    public Cleaner(Safelist safelist, Cleaner.CleanerSettings cleanerSettings) {
         Validate.notNull(safelist);
         this.safelist = safelist;
+        this.cleanerSettings = cleanerSettings;
     }
 
     /**
@@ -115,7 +127,7 @@ public class Cleaner {
         Document clean = Document.createShell("");
         Document dirty = Document.createShell("");
         ParseErrorList errorList = ParseErrorList.tracking(1);
-        List<Node> nodes = Parser.parseFragment(bodyHtml, dirty.body(), "", errorList);
+        List<Node> nodes = Parser.parseFragment(bodyHtml, dirty.body(), "", errorList, null);
         dirty.body().insertChildren(0, nodes);
         int numDiscarded = copySafeNodes(dirty.body(), clean.body());
         return numDiscarded == 0 && errorList.isEmpty();
@@ -183,15 +195,46 @@ public class Cleaner {
         int numDiscarded = 0;
         Attributes sourceAttrs = sourceEl.attributes();
         for (Attribute sourceAttr : sourceAttrs) {
-            if (safelist.isSafeAttribute(sourceTag, sourceEl, sourceAttr))
+            if (safelist.isSafeAttribute(sourceTag, sourceEl, sourceAttr)) {
+                sourceAttr.setValue(cleanAttributeValue(sourceAttr));
                 destAttrs.put(sourceAttr);
-            else
+            }
+            else {
                 numDiscarded++;
+            }
         }
         Attributes enforcedAttrs = safelist.getEnforcedAttributes(sourceTag);
         destAttrs.addAll(enforcedAttrs);
         dest.attributes().addAll(destAttrs); // re-attach, if removed in clear
         return new ElementMeta(dest, numDiscarded);
+    }
+    private String cleanAttributeValue(Attribute attr) {
+        if (!cleanerSettings.cleanAttributeValues()) {
+            return attr.getValue();
+        }
+        return getCleanedAttributeValue(attr);
+    }
+
+    private String getCleanedAttributeValue(Attribute attr) {
+        Document dirty = Parser.htmlParser().parseInput(attr.getValue(), cleanerSettings.baseUri());
+        Elements headChildren = dirty.head().children();
+        Elements bodyChildren = dirty.body().children();
+        if (headChildren.size() == 0 && bodyChildren.size() == 0) {
+            return attr.getValue();
+        }
+
+        Document cleaned = this.clean(dirty);
+        Elements cleanedHeadChildren = cleaned.head().children();
+        Elements cleanedBodyChildren = cleaned.body().children();
+        if (headChildren.size() > 0 && cleanedHeadChildren.size() == 0) {
+            return attr.getValue().replace(headChildren.outerHtml(), "");
+        }
+        if (bodyChildren.size() > 0 && cleanedBodyChildren.size() == 0) {
+            return attr.getValue().replace(bodyChildren.outerHtml(), "");
+        }
+        return headChildren.size() > 0
+                ? headChildren.outerHtml()
+                : bodyChildren.outerHtml();
     }
 
     private static class ElementMeta {
@@ -201,6 +244,64 @@ public class Cleaner {
         ElementMeta(Element el, int numAttribsDiscarded) {
             this.el = el;
             this.numAttribsDiscarded = numAttribsDiscarded;
+        }
+    }
+
+    /**
+     * A Cleaner's settings control how it cleans.
+     */
+    public static class CleanerSettings implements Cloneable {
+
+        private boolean cleanAttributeValues = false;
+        private String baseUri = "";
+
+        public CleanerSettings() {}
+
+        /**
+         * Get if clean attribute values is enabled. Default is false.
+         * @return if clean attribute values is enabled.
+         */
+        public boolean cleanAttributeValues() {
+            return cleanAttributeValues;
+        }
+
+        /**
+         * Enable or disable clean attribute values.
+         * @param clean new clean attribute values setting
+         * @return this, for chaining
+         */
+        public Cleaner.CleanerSettings cleanAttributeValues(boolean clean) {
+            this.cleanAttributeValues = clean;
+            return this;
+        }
+
+        /**
+         * Get base Uri for the cleaner. Default is empty string.
+         * @return the base Uri
+         */
+        public String baseUri() {
+            return this.baseUri == null || this.baseUri.trim().length() == 0 ?  "" : this.baseUri;
+        }
+
+        /**
+         * Set a base Uri for the cleaner.
+         * @param baseUri the new base Uri
+         * @return this, for chaining
+         */
+        public Cleaner.CleanerSettings baseUri(String baseUri) {
+            this.baseUri = baseUri;
+            return this;
+        }
+
+        @Override
+        public Cleaner.CleanerSettings clone() {
+            Cleaner.CleanerSettings clone;
+            try {
+                clone = (Cleaner.CleanerSettings) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new RuntimeException(e);
+            }
+            return clone;
         }
     }
 

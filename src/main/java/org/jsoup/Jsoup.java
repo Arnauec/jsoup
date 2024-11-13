@@ -3,6 +3,8 @@ package org.jsoup;
 import org.jsoup.helper.DataUtil;
 import org.jsoup.helper.HttpConnection;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Entities;
+import org.jsoup.parser.ParseSettings;
 import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
 import org.jsoup.safety.Cleaner;
@@ -292,7 +294,19 @@ Connection con3 = session.newRequest();
      @see Document#body()
      */
     public static Document parseBodyFragment(String bodyHtml, String baseUri) {
-        return Parser.parseBodyFragment(bodyHtml, baseUri);
+        return Parser.parseBodyFragment(bodyHtml, baseUri, null);
+    }
+
+    /**
+     Parse a fragment of HTML, with the assumption that it forms the {@code body} of the HTML.
+     @param bodyHtml body HTML fragment
+     @param baseUri  URL to resolve relative URLs against.
+     @param parseSettings the parse settings to use.
+     @return sane HTML document
+     @see Document#body()
+     */
+    public static Document parseBodyFragment(String bodyHtml, String baseUri, ParseSettings parseSettings) {
+        return Parser.parseBodyFragment(bodyHtml, baseUri, parseSettings);
     }
 
     /**
@@ -304,7 +318,7 @@ Connection con3 = session.newRequest();
      @see Document#body()
      */
     public static Document parseBodyFragment(String bodyHtml) {
-        return Parser.parseBodyFragment(bodyHtml, "");
+        return Parser.parseBodyFragment(bodyHtml, "", null);
     }
 
     /**
@@ -345,7 +359,35 @@ Connection con3 = session.newRequest();
         Document dirty = parseBodyFragment(bodyHtml, baseUri);
         Cleaner cleaner = new Cleaner(safelist);
         Document clean = cleaner.clean(dirty);
-        return clean.body().html();
+        return clean(bodyHtml, baseUri, safelist, new Cleaner.CleanerSettings().baseUri(baseUri));
+    }
+
+    /**
+     Get safe HTML from untrusted input HTML, by parsing input HTML and filtering it through an allow-list of safe
+     tags and attributes.
+     @param bodyHtml  input untrusted HTML (body fragment)
+     @param baseUri   URL to resolve relative URLs against
+     @param safelist  list of permitted HTML elements
+     @param outputSettings  the document output settings
+     @return safe HTML (body fragment)
+     @see Cleaner#clean(Document)
+     */
+    public static String clean(String bodyHtml, String baseUri, Safelist safelist, Document.OutputSettings outputSettings) {
+        return clean(bodyHtml, baseUri, safelist, outputSettings, new Cleaner.CleanerSettings().baseUri(baseUri));
+    }
+
+    /**
+     Get safe HTML from untrusted input HTML, by parsing input HTML and filtering it through an allow-list of safe
+     tags and attributes.
+     @param bodyHtml  input untrusted HTML (body fragment)
+     @param baseUri   URL to resolve relative URLs against
+     @param safelist  list of permitted HTML elements
+     @param cleanerSettings control how cleaner cleans
+     @return safe HTML (body fragment)
+     @see Cleaner#clean(Document)
+     */
+    public static String clean(String bodyHtml, String baseUri, Safelist safelist, Cleaner.CleanerSettings cleanerSettings) {
+        return clean(bodyHtml, baseUri, safelist, null, cleanerSettings);
     }
 
     /**
@@ -379,7 +421,7 @@ Connection con3 = session.newRequest();
      @see Cleaner#clean(Document)
      */
     public static String clean(String bodyHtml, Safelist safelist) {
-        return clean(bodyHtml, "", safelist);
+        return clean(bodyHtml, "", safelist, new Cleaner.CleanerSettings());
     }
 
     /**
@@ -396,11 +438,16 @@ Connection con3 = session.newRequest();
      * @return safe HTML (body fragment)
      * @see Cleaner#clean(Document)
      */
-    public static String clean(String bodyHtml, String baseUri, Safelist safelist, Document.OutputSettings outputSettings) {
-        Document dirty = parseBodyFragment(bodyHtml, baseUri);
-        Cleaner cleaner = new Cleaner(safelist);
+    public static String clean(String bodyHtml, String baseUri, Safelist safelist, Document.OutputSettings outputSettings, Cleaner.CleanerSettings cleanerSettings) {
+        Document dirty = parseBodyFragment(
+                bodyHtml,
+                baseUri,
+                outputSettings != null && outputSettings.escapeMode().equals(Entities.EscapeMode.none) ? ParseSettings.preserveEntities : null);
+        Cleaner cleaner = new Cleaner(safelist, cleanerSettings);
         Document clean = cleaner.clean(dirty);
-        clean.outputSettings(outputSettings);
+        if (outputSettings != null) {
+            clean.outputSettings(outputSettings);
+        }
         return clean.body().html();
     }
 

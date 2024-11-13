@@ -17,6 +17,7 @@ import java.util.HashMap;
 import static org.jsoup.nodes.Document.OutputSettings.*;
 import static org.jsoup.nodes.Entities.EscapeMode.base;
 import static org.jsoup.nodes.Entities.EscapeMode.extended;
+import static org.jsoup.nodes.Entities.EscapeMode.none;
 
 /**
  * HTML entities, and escape routines. Source: <a href="http://www.w3.org/TR/html5/named-character-references.html#named-character-references">W3C
@@ -48,7 +49,11 @@ public class Entities {
         /**
          * Complete HTML entities.
          */
-        extended(EntitiesData.fullPoints, 2125);
+        extended(EntitiesData.fullPoints, 2125),
+        /**
+         * No HTML entities.
+         */
+        none(EntitiesData.noPoints, 0);
 
         // table of named references to their codepoints. sorted so we can binary search. built by BuildEntities.
         private String[] nameKeys;
@@ -217,6 +222,9 @@ public class Entities {
         // surrogate pairs, split implementation for efficiency on single char common case (saves creating strings, char[]):
         final char c = (char) codePoint;
         if (codePoint < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
+            if (EscapeMode.none.equals(escapeMode)) {
+                accum.append(c);
+            }
             // html specific and required escapes:
             switch (c) {
                 case '&':

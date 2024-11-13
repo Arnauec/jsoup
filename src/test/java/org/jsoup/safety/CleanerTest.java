@@ -312,6 +312,19 @@ public class CleanerTest {
         assertEquals("<div><p>&#x212c;</p></div>", customOut2);
     }
 
+    @Test public void supplyNoEntitiesOutputSettings() {
+        // test that one can override the default document output settings
+        Document.OutputSettings os = new Document.OutputSettings();
+        os.prettyPrint(false);
+        os.escapeMode(Entities.EscapeMode.none);
+        os.charset("ascii");
+
+        String html = "&lt; &amp; &quot; &gt; < & ' \" >";
+        String result = Jsoup.clean(html, "http://foo.com/", Safelist.none(), os);
+
+        assertEquals(html, result); // entities now prefers shorted names if aliased
+    }
+
     @Test public void handlesFramesets() {
         String dirty = "<html><head><script></script><noscript></noscript></head><frameset><frame src=\"foo\" /><frame src=\"foo\" /></frameset></html>";
         String clean = Jsoup.clean(dirty, Safelist.basic());
@@ -434,6 +447,51 @@ public class CleanerTest {
             " </feMerge>\n" +
             "</svg>";
         assertEquals(expected, clean);
+    }
+
+    @Test public void cleanAttributeWithUnsafeHTML() {
+        String h = "<img src=\"<script>alert(1);</script>\">";
+        String baseUri = "http://example.com/";
+        String cleanHtml = Jsoup.clean(h, baseUri, getSafeList(), new Cleaner.CleanerSettings().cleanAttributeValues(true).baseUri(baseUri));
+
+        assertEquals("<img src=\"\">", TextUtil.stripNewlines(cleanHtml));
+    }
+
+    @Test public void dontCleanAttributeWithSafeHTML() {
+        String h = "<img src=\"<h1>This is safe</h1>\">";
+        String baseUri = "http://example.com/";
+        String cleanHtml = Jsoup.clean(h, baseUri, Safelist.relaxed(), new Cleaner.CleanerSettings().cleanAttributeValues(true).baseUri(baseUri));
+
+        assertEquals(h, TextUtil.stripNewlines(cleanHtml));
+    }
+
+    @Test public void dontCleanAttributeWithNoHTML() {
+        String h = "<span data-mention=\"123AB\">A Span</span>";
+        String baseUri = "http://example.com/";
+        String cleanHtml = Jsoup.clean(h, baseUri, getSafeList(), new Cleaner.CleanerSettings().cleanAttributeValues(true).baseUri(baseUri));
+
+        assertEquals(h, TextUtil.stripNewlines(cleanHtml));
+    }
+
+    @Test public void shouldStripTagsWithURLEncoding() {
+        String h = "<img src=\"%-->2F%3E<script>alert(1);</script> javascript:alert('XSS');\" />";
+        String baseUri = "http://example.com/";
+        String cleanHtml = Jsoup.clean(h, baseUri, getSafeList(), new Cleaner.CleanerSettings().cleanAttributeValues(true).baseUri(baseUri));
+
+        assertEquals("<img src=\"%-->2F%3E javascript:alert('XSS');\">", TextUtil.stripNewlines(cleanHtml));
+    }
+
+    private final Safelist getSafeList() {
+        return new Safelist()
+                // Images
+                .addTags("img")
+                .addAttributes("img", "align", "alt", "height", "src", "title", "width", "link")
+                .addProtocols("img", "src", "http", "https")
+
+                // Allow data-mention and contenteditable
+                .addAttributes("span", "data-mention", "contenteditable", "attribute")
+
+                .preserveRelativeLinks(true);
     }
 
 }

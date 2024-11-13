@@ -18,12 +18,16 @@ public class EntitiesTest {
         String escapedAsciiXhtml = Entities.escape(text, new OutputSettings().charset("ascii").escapeMode(xhtml));
         String escapedUtfFull = Entities.escape(text, new OutputSettings().charset("UTF-8").escapeMode(extended));
         String escapedUtfMin = Entities.escape(text, new OutputSettings().charset("UTF-8").escapeMode(xhtml));
+        String noEntitiesAscii = Entities.escape(text, new OutputSettings().charset("ascii").escapeMode(none));
+        String noEntitiesUtf = Entities.escape(text, new OutputSettings().charset("UTF-8").escapeMode(none));
 
         assertEquals("Hello &amp;&lt;&gt; &Aring; &aring; &#x3c0; &#x65b0; there &frac34; &copy; &raquo; &apos; &quot;", escapedAscii);
         assertEquals("Hello &amp;&lt;&gt; &angst; &aring; &pi; &#x65b0; there &frac34; &copy; &raquo; &apos; &quot;", escapedAsciiFull);
         assertEquals("Hello &amp;&lt;&gt; &#xc5; &#xe5; &#x3c0; &#x65b0; there &#xbe; &#xa9; &#xbb; &#x27; &quot;", escapedAsciiXhtml);
         assertEquals("Hello &amp;&lt;&gt; Å å π 新 there ¾ © » &apos; &quot;", escapedUtfFull);
         assertEquals("Hello &amp;&lt;&gt; Å å π 新 there ¾ © » &#x27; &quot;", escapedUtfMin);
+        assertEquals(noEntitiesAscii, text);
+        assertEquals(noEntitiesUtf, text);
         // odd that it's defined as aring in base but angst in full
 
         // round trip
@@ -171,7 +175,7 @@ public class EntitiesTest {
         Document xml = Jsoup.parse(input, "", Parser.xmlParser());
         assertEquals(input, xml.html());
     }
-    
+
     @Test public void escapeByClonedOutputSettings() {
         OutputSettings outputSettings = new OutputSettings();
         String text = "Hello &<> Å å π 新 there ¾ © »";

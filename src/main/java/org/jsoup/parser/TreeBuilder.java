@@ -52,7 +52,7 @@ abstract class TreeBuilder {
         reader = new CharacterReader(input);
         trackSourceRange = parser.isTrackPosition();
         reader.trackNewlines(parser.isTrackErrors() || trackSourceRange); // when tracking errors or source ranges, enable newline tracking for better legibility
-        tokeniser = new Tokeniser(this);
+        tokeniser = new Tokeniser(reader, parser.getErrors(), parser.settings());
         stack = new ArrayList<>(32);
         seenTags = new HashMap<>();
         start = new Token.StartTag(this);
